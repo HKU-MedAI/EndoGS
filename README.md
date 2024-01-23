@@ -1,6 +1,6 @@
 # Deformable Endoscopic Tissues Reconstruction with Gaussian Splatting
 
-This is the official code for https://arxiv.org/abs/2401.xxxxx.
+This is the official code for https://arxiv.org/abs/2401.11535.
 
 ## Overview
 
@@ -52,7 +52,7 @@ If you find our work useful, please kindly cite as:
 @article{zhu2024deformable,
   title={Deformable Endoscopic Tissues Reconstruction with Gaussian Splatting},
   author={Zhu, Lingting and Wang, Zhao and Jin, Zhenchao and Lin, Guying and Yu, Lequan},
-  journal={arXiv preprint arXiv:2401.xxxxx},
+  journal={arXiv preprint arXiv:2401.11535},
   year={2024}
 }
 ```
