@@ -19,7 +19,7 @@ Note: for the submodule diff-gaussian-rasterization of the [3D-GS](https://githu
 
 ## Dataset
 
-We use the dataset in [EndoNerf](https://github.com/med-air/EndoNeRF). Please contact [Zhao Wang](https://kyfafyd.wang/) (zwang21@cse.cuhk.edu.hk) for the access of the data.
+We use the dataset in [EndoNerf](https://github.com/med-air/EndoNeRF). Download the data from their website.
 
 Use [COLMAP](https://demuc.de/colmap/) to estimate the initial point clouds. Store the files (`cameras.bin, images.bin, points3D.bin`) in the data path (e.g., `./data/cutting_tissues_twice/sparse/`).
 
