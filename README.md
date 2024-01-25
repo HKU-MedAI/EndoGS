@@ -58,4 +58,4 @@ If you find our work useful, please kindly cite as:
 ```
 
 ## Acknowledgement
-* The codebase is developed based on [3D-GS](https://github.com/graphdeco-inria/gaussian-splatting) (Kerbl et al.), [4D-GS](https://github.com/hustvl/4DGaussians) (Wu et al.), and [EndoNeRF](https://github.com/med-air/EndoNeRF) (Wang et at.).
+* The codebase is developed based on [3D-GS](https://github.com/graphdeco-inria/gaussian-splatting) (Kerbl et al.), [4D-GS](https://github.com/hustvl/4DGaussians) (Wu et al.), and [EndoNeRF](https://github.com/med-air/EndoNeRF) (Wang et al.).
