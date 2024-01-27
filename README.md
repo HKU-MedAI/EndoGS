@@ -2,6 +2,8 @@
 
 This is the official code for https://arxiv.org/abs/2401.11535.
 
+Note: we will have some updates on code and arxiv in 2-3 weeks.
+
 ## Overview
 
 <img src='./misc/overview.jpg' width=800>
