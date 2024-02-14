@@ -104,4 +104,5 @@ def render(viewpoint_camera, pc : GaussianModel, time, bg_color : torch.Tensor, 
             "viewspace_points": screenspace_points,
             "visibility_filter" : radii > 0,
             "radii": radii,
-            "depth":depth}
+            "depth":depth,
+            "opacities":opacity_final}

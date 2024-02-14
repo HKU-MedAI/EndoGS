@@ -21,6 +21,8 @@ from simple_knn._C import distCUDA2
 from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
 from gaussian_core.regulation import compute_plane_smoothness
+from pytorch3d.transforms import quaternion_apply, quaternion_to_matrix
+from pytorch3d.ops import knn_points
 
 from gaussian_core.deformation import deform_network
 
@@ -65,6 +67,10 @@ class GaussianModel:
         self._deformation_table = torch.empty(0)
 
         self.opt = opt
+
+        self.knn_to_track = 0
+        self.knn_dists = torch.empty(0)
+        self.knn_idx = torch.empty(0)
 
         self.setup_functions()
 
@@ -140,6 +146,28 @@ class GaussianModel:
     def oneupSHdegree(self):
         if self.active_sh_degree < self.max_sh_degree:
             self.active_sh_degree += 1
+
+    def get_covariance_new(self, return_full_matrix=False, return_sqrt=False, inverse_scales=False):
+        scaling = self.get_scaling
+        if inverse_scales:
+            scaling = 1. / scaling.clamp(min=1e-8)
+        scaled_rotation = quaternion_to_matrix(self.get_rotation) * scaling[:, None]
+        if return_sqrt:
+            return scaled_rotation
+        
+        cov3Dmatrix = scaled_rotation @ scaled_rotation.transpose(-1, -2)
+        if return_full_matrix:
+            return cov3Dmatrix
+        
+        cov3D = torch.zeros((cov3Dmatrix.shape[0], 6), dtype=torch.float, device=self.device)
+        cov3D[:, 0] = cov3Dmatrix[:, 0, 0]
+        cov3D[:, 1] = cov3Dmatrix[:, 0, 1]
+        cov3D[:, 2] = cov3Dmatrix[:, 0, 2]
+        cov3D[:, 3] = cov3Dmatrix[:, 1, 1]
+        cov3D[:, 4] = cov3Dmatrix[:, 1, 2]
+        cov3D[:, 5] = cov3Dmatrix[:, 2, 2]
+        
+        return cov3D
 
     def create_from_pcd(self, pcd : BasicPointCloud, spatial_lr_scale : float):
         self.spatial_lr_scale = spatial_lr_scale
@@ -584,3 +612,174 @@ class GaussianModel:
         return total
     def compute_regulation(self, time_smoothness_weight, l1_time_planes_weight, plane_tv_weight):
         return plane_tv_weight * self._plane_regulation() + time_smoothness_weight * self._time_regulation() + l1_time_planes_weight * self._l1_regulation()
+
+    def reset_neighbors(self, knn_to_track:int=None):
+        if not hasattr(self, 'knn_to_track'):
+            if knn_to_track is None:
+                knn_to_track = 16
+            self.knn_to_track = knn_to_track
+        else:
+            if knn_to_track is None:
+                knn_to_track = self.knn_to_track 
+        # Compute KNN               
+        with torch.no_grad():
+            self.knn_to_track = knn_to_track
+            knns = knn_points(self.get_xyz[None], self.get_xyz[None], K=knn_to_track)
+            self.knn_dists = knns.dists[0]
+            self.knn_idx = knns.idx[0]
+
+    def get_beta(self,
+                 closest_gaussians_idx=None, 
+                 ):
+        
+        if closest_gaussians_idx is None:
+            raise ValueError("closest_gaussians_idx must be provided.")
+        return self.get_scaling.min(dim=-1)[0][closest_gaussians_idx].mean(dim=1)
+
+    def get_points_depth_in_depth_map(self, fov_camera, depth, points_in_camera_space, image_height, image_width):
+        depth_view = depth.unsqueeze(0)
+        pts_projections = fov_camera.get_projection_transform().transform_points(points_in_camera_space)
+        factor = -1 * min(image_height, image_width)
+        pts_projections[..., 0] = factor / image_width * pts_projections[..., 0]
+        pts_projections[..., 1] = factor / image_height * pts_projections[..., 1]
+        pts_projections = pts_projections[..., :2].view(1, -1, 1, 2)
+
+        map_z = torch.nn.functional.grid_sample(input=depth_view,
+                                                grid=pts_projections,
+                                                mode='bilinear',
+                                                padding_mode='border'
+                                                )[0, 0, :, 0]
+        return map_z
+    
+
+    def sample_points_in_gaussians(self, num_samples, sampling_scale_factor=1., mask=None):
+        """Sample points in the Gaussians.
+
+        Args:
+            num_samples (_type_): _description_
+            sampling_scale_factor (_type_, optional): _description_. Defaults to 1..
+            mask (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
+        if mask is None:
+            scaling = self.get_scaling
+        else:
+            scaling = self.get_scaling[mask]
+        
+        areas = torch.ones_like(scaling[..., 0])
+        
+        
+        areas = areas.abs()
+        cum_probs = areas.cumsum(dim=-1) / areas.sum(dim=-1, keepdim=True)
+        
+        random_indices = torch.multinomial(cum_probs, num_samples=num_samples, replacement=True)
+
+        points = self.get_xyz.detach().float().cuda()
+        if mask is not None:
+            n_points = len(points)
+            valid_indices = torch.arange(n_points, device="cuda")[mask]
+            random_indices = valid_indices[random_indices]
+        
+        random_points = points[random_indices] + quaternion_apply(
+            self.get_rotation[random_indices], 
+            sampling_scale_factor * self.get_scaling[random_indices] * torch.randn_like(points[random_indices]))
+        
+        return random_points, random_indices
+
+
+    def get_field_values(self, x, gaussian_idx=None, 
+                    closest_gaussians_idx=None,
+                    gaussian_strengths=None, 
+                    gaussian_centers=None, 
+                    gaussian_inv_scaled_rotation=None,
+                    return_sdf=True, density_threshold=1., density_factor=1.,
+                    return_sdf_grad=False, sdf_grad_max_value=10.,
+                    opacity_min_clamp=1e-16,
+                    return_closest_gaussian_opacities=False,
+                    return_beta=False,
+                    opacity=None):
+        if gaussian_strengths is None:
+            gaussian_strengths = opacity
+        if gaussian_centers is None:
+            gaussian_centers = self.get_xyz
+        if gaussian_inv_scaled_rotation is None:
+            gaussian_inv_scaled_rotation = self.get_covariance_new(return_full_matrix=True, return_sqrt=True, inverse_scales=True)
+
+        if closest_gaussians_idx is None:
+            closest_gaussians_idx = self.knn_idx[gaussian_idx]
+        closest_gaussian_centers = gaussian_centers[closest_gaussians_idx]
+        closest_gaussian_inv_scaled_rotation = gaussian_inv_scaled_rotation[closest_gaussians_idx]
+        closest_gaussian_strengths = gaussian_strengths[closest_gaussians_idx]
+        
+        fields = {}
+        
+        shift = (x[:, None] - closest_gaussian_centers)
+        warped_shift = closest_gaussian_inv_scaled_rotation.transpose(-1, -2) @ shift[..., None]
+        neighbor_opacities = (warped_shift[..., 0] * warped_shift[..., 0]).sum(dim=-1).clamp(min=0., max=1e8)
+        neighbor_opacities = density_factor * closest_gaussian_strengths[..., 0] * torch.exp(-1. / 2 * neighbor_opacities)
+        densities = neighbor_opacities.sum(dim=-1)
+        fields['density'] = densities.clone()
+        density_mask = densities >= 1.
+        densities[density_mask] = densities[density_mask] / (densities[density_mask].detach() + 1e-12)
+
+        if return_closest_gaussian_opacities:
+            fields['closest_gaussian_opacities'] = neighbor_opacities
+        
+        if return_sdf or return_sdf_grad or return_beta:
+            beta = self.get_beta(closest_gaussians_idx=closest_gaussians_idx)
+            clamped_densities = densities.clamp(min=opacity_min_clamp)
+
+        if return_beta:
+            fields['beta'] = beta
+        
+        # Compute the signed distance field
+        if return_sdf:
+            sdf_values = beta * (
+                torch.sqrt(-2. * torch.log(clamped_densities))
+                - np.sqrt(-2. * np.log(min(density_threshold, 1.)))
+                )
+            fields['sdf'] = sdf_values
+            
+        # Compute the gradient of the signed distance field
+        if return_sdf_grad:
+            sdf_grad = neighbor_opacities[..., None] * (closest_gaussian_inv_scaled_rotation @ warped_shift)[..., 0]
+            sdf_grad = sdf_grad.sum(dim=-2)
+            sdf_grad = (beta / (clamped_densities * torch.sqrt(-2. * torch.log(clamped_densities))).clamp(min=opacity_min_clamp))[..., None] * sdf_grad
+            fields['sdf_grad'] = sdf_grad.clamp(min=-sdf_grad_max_value, max=sdf_grad_max_value)
+            
+        return fields
+
+    def get_cameras_spatial_extent(self, nerf_cameras, return_average_xyz=False): 
+        camera_centers = nerf_cameras.p3d_cameras.get_camera_center()
+        avg_camera_center = camera_centers.mean(dim=0, keepdim=True)
+        half_diagonal = torch.norm(camera_centers - avg_camera_center, dim=-1).max().item()
+
+        radius = 1.1 * half_diagonal
+        if return_average_xyz:
+            return radius, avg_camera_center
+        else:
+            return radius
+
+    def get_smallest_axis(self, return_idx=False):
+        """Returns the smallest axis of the Gaussians.
+
+        Args:
+            return_idx (bool, optional): _description_. Defaults to False.
+
+        Returns:
+            _type_: _description_
+        """
+        rotation_matrices = quaternion_to_matrix(self.get_rotation)
+        smallest_axis_idx = self.get_scaling.min(dim=-1)[1][..., None, None].expand(-1, 3, -1)
+
+        smallest_axis = rotation_matrices.gather(2, smallest_axis_idx)
+        if return_idx:
+            return smallest_axis.squeeze(dim=2), smallest_axis_idx[..., 0, 0]
+        return smallest_axis.squeeze(dim=2)
+    
+    def get_normals(self):
+        normals = self.get_smallest_axis()
+
+        return normals

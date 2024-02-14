@@ -4,6 +4,7 @@ from typing import Optional, Sequence, Iterable, Collection
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 
 def get_normalized_directions(directions):
@@ -138,10 +139,10 @@ class HexPlaneField(nn.Module):
 
 
     def set_aabb(self,xyz_max, xyz_min):
-        aabb = torch.tensor([
+        aabb = torch.tensor(np.array([
             xyz_max,
             xyz_min
-        ],  dtype=torch.float32)
+        ]),  dtype=torch.float32)
         self.aabb = nn.Parameter(aabb,requires_grad=True)
         print("Voxel Plane: set aabb=",self.aabb)
 

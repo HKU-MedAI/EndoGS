@@ -1,8 +1,6 @@
-# Deformable Endoscopic Tissues Reconstruction with Gaussian Splatting
+# EndoGS: Deformable Endoscopic Tissues Reconstruction with Gaussian Splatting
 
 This is the official code for https://arxiv.org/abs/2401.11535.
-
-Note: we will have some updates on code and arxiv in 2-3 weeks.
 
 ## Overview
 
@@ -16,12 +14,13 @@ git clone https://github.com/HKU-MedAI/EndoGS.git
 conda env create --file environment.yml
 conda activate gs
 pip install git+https://github.com/ingra14m/depth-diff-gaussian-rasterization.git
+pip install "git+https://github.com/facebookresearch/pytorch3d.git"
 ```
 Note: for the submodule diff-gaussian-rasterization of the [3D-GS](https://github.com/graphdeco-inria/gaussian-splatting), we use the depth branch of https://github.com/ingra14m/depth-diff-gaussian-rasterization.
 
 ## Dataset
 
-We use the dataset in [EndoNerf](https://github.com/med-air/EndoNeRF). Download the data from their website.
+We use the dataset in [EndoNeRF](https://github.com/med-air/EndoNeRF). Download the data from their website.
 
 Use [COLMAP](https://demuc.de/colmap/) to estimate the initial point clouds. Store the files (`cameras.bin, images.bin, points3D.bin`) in the data path (e.g., `./data/cutting_tissues_twice/sparse/`).
 
@@ -52,12 +51,12 @@ Note: we should use the same masks in training and evaluation. If the name 'gt_m
 If you find our work useful, please kindly cite as:
 ```
 @article{zhu2024deformable,
-  title={Deformable Endoscopic Tissues Reconstruction with Gaussian Splatting},
-  author={Zhu, Lingting and Wang, Zhao and Jin, Zhenchao and Lin, Guying and Yu, Lequan},
+  title={EndoGS: Deformable Endoscopic Tissues Reconstruction with Gaussian Splatting},
+  author={Zhu, Lingting and Wang, Zhao and Cui, Jiahao and Jin, Zhenchao and Lin, Guying and Yu, Lequan},
   journal={arXiv preprint arXiv:2401.11535},
   year={2024}
 }
 ```
 
 ## Acknowledgement
-* The codebase is developed based on [3D-GS](https://github.com/graphdeco-inria/gaussian-splatting) (Kerbl et al.), [4D-GS](https://github.com/hustvl/4DGaussians) (Wu et al.), and [EndoNeRF](https://github.com/med-air/EndoNeRF) (Wang et al.).
+* The codebase is developed based on [3D-GS](https://github.com/graphdeco-inria/gaussian-splatting) (Kerbl et al.), [4D-GS](https://github.com/hustvl/4DGaussians) (Wu et al.), [SuGaR](https://github.com/Anttwo/SuGaR) (Guédon et al.), and [EndoNeRF](https://github.com/med-air/EndoNeRF) (Wang et al.).
