@@ -13,8 +13,8 @@ Clone this repository and install packages:
 git clone https://github.com/HKU-MedAI/EndoGS.git
 conda env create --file environment.yml
 conda activate gs
-pip install git+https://github.com/ingra14m/depth-diff-gaussian-rasterization.git
-pip install "git+https://github.com/facebookresearch/pytorch3d.git"
+pip install git+https://github.com/ingra14m/depth-diff-gaussian-rasterization.git@depth
+pip install git+https://github.com/facebookresearch/pytorch3d.git
 ```
 Note: for the submodule diff-gaussian-rasterization of the [3D-GS](https://github.com/graphdeco-inria/gaussian-splatting), we use the depth branch of https://github.com/ingra14m/depth-diff-gaussian-rasterization.
 
