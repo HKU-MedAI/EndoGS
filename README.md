@@ -48,11 +48,11 @@ Note: we should use the same masks in training and evaluation. If the name 'gt_m
 
 ## Citation
 
-If you find our work useful, please kindly cite as:
+If you find our work useful, please kindly cite as (v1 version of arxiv bib to avoid tracking missing):
 ```
 @article{zhu2024deformable,
-  title={EndoGS: Deformable Endoscopic Tissues Reconstruction with Gaussian Splatting},
-  author={Zhu, Lingting and Wang, Zhao and Cui, Jiahao and Jin, Zhenchao and Lin, Guying and Yu, Lequan},
+  title={Deformable Endoscopic Tissues Reconstruction with Gaussian Splatting},
+  author={Zhu, Lingting and Wang, Zhao and Jin, Zhenchao and Lin, Guying and Yu, Lequan},
   journal={arXiv preprint arXiv:2401.11535},
   year={2024}
 }
